@@ -1,5 +1,5 @@
 import { User } from "../entities/User";
-import { MyContext } from "src/types";
+import { MyContext } from "../types";
 import {
   Arg,
   Ctx,
@@ -7,6 +7,7 @@ import {
   InputType,
   Mutation,
   ObjectType,
+  Query,
   Resolver,
 } from "type-graphql";
 // hashing for password
@@ -38,11 +39,20 @@ class UserResponse {
 }
 @Resolver()
 export class UserResolver {
+  /* -------------------------- returns current user -------------------------- */
+  @Query(() => User, { nullable: true })
+  async me(@Ctx() { req, em }: MyContext) {
+    if (!req.session.userId) {
+      return "You are not logged in";
+    }
+    const user = await em.findOne(User, { id: req.session.userId });
+    return user;
+  }
   // ------------------------
   @Mutation(() => UserResponse)
   async register(
     @Arg("options") options: UsernamePasswordInfo,
-    @Ctx() { em }: MyContext
+    @Ctx() { em, req }: MyContext
   ): Promise<UserResponse> {
     const existingUser: User | null = await em.findOne(User, {
       username: options.username,
@@ -84,14 +94,16 @@ export class UserResolver {
       password: hashedPassword,
     });
     await em.persistAndFlush(user);
-    console.log(user);
+    // console.log(user);
+    req.session.userId = user.id;
+
     return { user };
   }
   //   ?Login
   @Mutation(() => UserResponse)
   async login(
     @Arg("options") options: UsernamePasswordInfo,
-    @Ctx() { em }: MyContext
+    @Ctx() { em, req }: MyContext
   ): Promise<UserResponse> {
     const user = await em.findOne(User, {
       username: options.username,
@@ -120,6 +132,7 @@ export class UserResolver {
         ],
       };
     }
+    req.session.userId = user.id;
 
     return {
       user,
